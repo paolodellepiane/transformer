@@ -6,18 +6,15 @@ use std::{
 
 fn main() {
     let v = read_json_from_file("appsettings-bom.json").expect("error parsing JSON");
-    transform(&v, "").expect("error transforming");
+    transform(&v, &[])
 }
 
-fn transform(value: &Value, prefix: &str) -> Result<(), Box<dyn Error>> {
-    for (n, v) in value.as_object().unwrap().iter() {
-        let prefix = format!("{}{}", prefix, n);        
-        match v {
-            Value::Object(_) => transform(v, &format!("{}__", &prefix))?,
-            _ => println!("{} = {}", prefix, v.to_string()),
-        }
+fn transform(value: &Value, path: &[&str]) {
+    let prefix = path.join("__");
+    match value {
+        Value::Object(o) => o.iter().for_each(|(n, v)| transform(v,  &[&path[..], &[n]].concat())),
+        _ => println!("{} = {}", prefix, value.to_string())
     }
-    Ok(())
 }
 
 fn read_json_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error>> {
