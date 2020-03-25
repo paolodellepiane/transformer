@@ -9,8 +9,7 @@ fn main() {
 fn traverse() -> Result<(), Box<dyn Error>> {
     for entry in glob("**/*.json")?.filter_map(Result::ok) {
         println!("// {:?}", entry);
-        let v = read_json_from_file(entry).expect("error parsing JSON ");
-        transform(&v, &[]);
+        read_json_from_file(entry).ok().map(|v| transform(&v, &[]));
     }
     Ok(())
 }
