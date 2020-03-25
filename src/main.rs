@@ -1,9 +1,18 @@
 use serde_json::Value;
 use std::{error::Error, path::Path};
+use glob::glob;
 
 fn main() {
-    let v = read_json_from_file("appsettings-bom.json").expect("error parsing JSON");
-    transform(&v, &[])
+    traverse().unwrap()
+}
+
+fn traverse() -> Result<(), Box<dyn Error>> {
+    for entry in glob("**/*.json")?.filter_map(Result::ok) {
+        println!("// {:?}", entry);
+        let v = read_json_from_file(entry).expect("error parsing JSON ");
+        transform(&v, &[]);
+    }
+    Ok(())
 }
 
 fn transform(value: &Value, path: &[&str]) {
@@ -25,11 +34,8 @@ fn read_json_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error>>
 }
 
 fn strip_bom(buf: &[u8]) -> &[u8] {
-    if is_bom(&buf) {
-        &buf[3..]
-    } else {
-        &buf[..]
-    }
+    let b = if is_bom(&buf) { &buf[3..] } else { &buf[..] };
+    b
 }
 
 fn is_bom(buf: &[u8]) -> bool {
