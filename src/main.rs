@@ -8,10 +8,10 @@ fn main() {
         .version(crate_version!())
         .author(crate_authors!())
         .about("Transforms .net core settings json to docker env files")
-        .arg(Arg::with_name("glob").short("g").default_value("**/*.json"))
+        .arg(Arg::with_name("pattern").help("Glob pattern").default_value("**/*.json"))
         .get_matches();
 
-    traverse(matches.value_of("glob").unwrap()).unwrap()
+    traverse(matches.value_of("pattern").unwrap()).unwrap()
 }
 
 fn traverse(pattern: &str) -> Result<(), Box<dyn Error>> {
