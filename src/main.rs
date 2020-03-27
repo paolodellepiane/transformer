@@ -1,13 +1,21 @@
+use clap::{crate_authors, crate_version, App, Arg};
+use glob::glob;
 use serde_json::Value;
 use std::{error::Error, path::Path};
-use glob::glob;
 
 fn main() {
-    traverse().unwrap()
+    let matches = App::new("transformer")
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about("Transforms .net core settings json to docker env files")
+        .arg(Arg::with_name("glob").short("g").default_value("**/*.json"))
+        .get_matches();
+
+    traverse(matches.value_of("glob").unwrap()).unwrap()
 }
 
-fn traverse() -> Result<(), Box<dyn Error>> {
-    for entry in glob("**/*.json")?.filter_map(Result::ok) {
+fn traverse(pattern: &str) -> Result<(), Box<dyn Error>> {
+    for entry in glob(pattern)?.filter_map(Result::ok) {
         println!("// {:?}", entry);
         read_json_from_file(entry).ok().map(|v| transform(&v, &[]));
     }
