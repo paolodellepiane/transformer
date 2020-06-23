@@ -2,16 +2,74 @@ use clap::{crate_authors, crate_version, App, Arg};
 use glob::glob;
 use serde_json::Value;
 use std::{error::Error, path::Path};
+use iced::{button, Align, Button, Column, Element, Sandbox, Settings, Text};
 
 fn main() {
     let matches = App::new("transformer")
         .version(crate_version!())
         .author(crate_authors!())
         .about("Transforms .net core settings json to docker env files")
-        .arg(Arg::with_name("pattern").help("Glob pattern").default_value("**/*.json"))
+        .arg(
+            Arg::with_name("pattern")
+                .help("Glob pattern")
+                .default_value("**/*.json"),
+        )
         .get_matches();
 
-    traverse(matches.value_of("pattern").unwrap()).unwrap()
+    Counter::run(Settings::default())
+    // traverse(matches.value_of("pattern").unwrap()).unwrap()
+}
+
+#[derive(Default)]
+struct Counter {
+    value: i32,
+    increment_button: button::State,
+    decrement_button: button::State,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    IncrementPressed,
+    DecrementPressed,
+}
+
+impl Sandbox for Counter {
+    type Message = Message;
+
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn title(&self) -> String {
+        String::from("Counter - Iced")
+    }
+
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::IncrementPressed => {
+                self.value += 1;
+            }
+            Message::DecrementPressed => {
+                self.value -= 1;
+            }
+        }
+    }
+
+    fn view(&mut self) -> Element<Message> {
+        Column::new()
+            .padding(20)
+            .align_items(Align::Center)
+            .push(
+                Button::new(&mut self.increment_button, Text::new("Increment"))
+                    .on_press(Message::IncrementPressed),
+            )
+            .push(Text::new(self.value.to_string()).size(50))
+            .push(
+                Button::new(&mut self.decrement_button, Text::new("Decrement"))
+                    .on_press(Message::DecrementPressed),
+            )
+            .into()
+    }
 }
 
 fn traverse(pattern: &str) -> Result<(), Box<dyn Error>> {
