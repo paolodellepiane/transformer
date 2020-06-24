@@ -1,7 +1,7 @@
 use clap::{crate_authors, crate_version, App, Arg};
 use glob::glob;
 use serde_json::Value;
-use std::{error::Error, path::Path};
+use std::{error::Error, path::Path, collections::HashMap};
 
 fn main() {
     let matches = App::new("transformer")
@@ -15,10 +15,15 @@ fn main() {
         )
         .get_matches();
 
-    traverse(matches.value_of("pattern").unwrap()).unwrap()
+    traverse(matches.value_of("pattern").unwrap(), matches.value_of("vars").unwrap()).unwrap()
 }
 
-fn traverse(pattern: &str) -> Result<(), Box<dyn Error>> {
+fn traverse<P: AsRef<Path>>(pattern: &str, vars_file: &P) -> Result<(), Box<dyn Error>> {
+    let vars: HashMap<_, _> = std::fs::read_to_string(vars_file)?.lines().map(|l| {
+        let ls = l.split_whitespace();
+        (ls.next().unwrap(), ls.next().unwrap())
+    }).collect();
+
     for entry in glob(pattern)?.filter_map(Result::ok) {
         println!("// {:?}", entry);
         read_json_from_file(entry).ok().map(|v| transform(&v, &[]));
@@ -34,8 +39,12 @@ fn transform(value: &Value, path: &[&str]) {
             .iter()
             .enumerate()
             .for_each(|(i, v)| transform(v, &append(path, &i.to_string()))),
-        _ => println!("{} = {}", prefix, value.to_string()),
+        _ => println!("{} = {}", prefix, try_substitute(value)),
     }
+}
+
+fn try_substitute(value: &Value) -> String {
+    value.to_string()
 }
 
 fn read_json_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error>> {
