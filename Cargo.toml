@@ -1,13 +1,13 @@
 [package]
-name = "transformer"
-version = "0.1.0"
-authors = ["pdell <paolod29@gmail.com>"]
+authors = [ "pdell <paolod29@gmail.com>" ]
 edition = "2018"
+name    = "transformer"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = "1.0.114"
+clap       = "2.33.1"
+glob       = "0.3.0"
+serde      = "1.0.114"
 serde_json = "1.0.55"
-glob = "0.3.0"
-clap = "2.33.1"

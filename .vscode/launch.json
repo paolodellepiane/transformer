@@ -16,7 +16,10 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "**/a*.json",
+                "vars.txt"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

@@ -1,44 +1,56 @@
 use clap::{crate_authors, crate_version, App, Arg};
 use glob::glob;
 use serde_json::Value;
-use std::{error::Error, path::Path, collections::HashMap};
+use std::{collections::HashMap, error::Error, path::Path};
 
 fn main() {
     let matches = App::new("transformer")
         .version(crate_version!())
         .author(crate_authors!())
         .about("Transforms .net core settings json to docker env files")
-        .arg(
-            Arg::with_name("pattern")
-                .help("Glob pattern")
-                .default_value("**/*.json"),
-        )
+        .args(&[
+            Arg::with_name("pattern").help("Glob pattern"),
+            Arg::with_name("variables").help("Variable file for replacement with format: %VAR_NAME%=VALUE"),
+        ])
         .get_matches();
 
-    traverse(matches.value_of("pattern").unwrap(), matches.value_of("vars").unwrap()).unwrap()
+    traverse(matches.value_of("pattern"), matches.value_of("variables")).unwrap()
 }
 
-fn traverse<P: AsRef<Path>>(pattern: &str, vars_file: &P) -> Result<(), Box<dyn Error>> {
-    let vars: HashMap<_, _> = std::fs::read_to_string(vars_file)?.lines().map(|l| {
-        let ls = l.split_whitespace();
-        (ls.next().unwrap(), ls.next().unwrap())
-    }).collect();
+fn traverse<P: AsRef<Path>>(pattern: Option<&str>, vars_file: Option<P>) -> Result<(), Box<dyn Error>> {
+    let vars_file_content: String;
+    let vars = if let Some(vars_file) = vars_file {
+        vars_file_content = std::fs::read_to_string(vars_file)?;
+        vars_file_content
+            .lines()
+            .map(|l| {
+                let mut ls = l.split_whitespace();
+                match (ls.next(), ls.next()) {
+                    (Some(a), Some(b)) => Ok((a, b)),
+                    _ => Err("wrong file format"),
+                }
+            })
+            .filter_map(Result::ok)
+            .collect()
+    } else {
+        HashMap::new()
+    };
 
-    for entry in glob(pattern)?.filter_map(Result::ok) {
+    for entry in glob(pattern.unwrap_or("**/*.json"))?.filter_map(Result::ok) {
         println!("// {:?}", entry);
-        read_json_from_file(entry).ok().map(|v| transform(&v, &[]));
+        read_json_from_file(entry).ok().map(|v| transform(&v, &[], &vars));
     }
     Ok(())
 }
 
-fn transform(value: &Value, path: &[&str]) {
+fn transform(value: &Value, path: &[&str], vars: &HashMap<&str, &str>) {
     let prefix = path.join("__");
     match value {
-        Value::Object(o) => o.iter().for_each(|(n, v)| transform(v, &append(path, n))),
+        Value::Object(o) => o.iter().for_each(|(n, v)| transform(v, &append(path, n), vars)),
         Value::Array(a) => a
             .iter()
             .enumerate()
-            .for_each(|(i, v)| transform(v, &append(path, &i.to_string()))),
+            .for_each(|(i, v)| transform(v, &append(path, &i.to_string()), &vars)),
         _ => println!("{} = {}", prefix, try_substitute(value)),
     }
 }
