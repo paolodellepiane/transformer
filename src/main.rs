@@ -2,6 +2,7 @@ use clap::{crate_authors, crate_version, App, Arg};
 use glob::glob;
 use serde_json::Value;
 use std::{collections::HashMap, error::Error, path::Path};
+use regex::Regex;
 
 fn main() {
     let matches = App::new("transformer")
@@ -10,7 +11,8 @@ fn main() {
         .about("Transforms .net core settings json to docker env files")
         .args(&[
             Arg::with_name("pattern").help("Glob pattern"),
-            Arg::with_name("variables").help("Variable file for replacement with format: %VAR_NAME%=VALUE"),
+            Arg::with_name("variables")
+                .help("Variables list file with format:\n\t%VAR_NAME% VALUE\n\t%VAR_NAME2% VALUE2\n\t... "),
         ])
         .get_matches();
 
@@ -18,15 +20,45 @@ fn main() {
 }
 
 fn traverse<P: AsRef<Path>>(pattern: Option<&str>, vars_file: Option<P>) -> Result<(), Box<dyn Error>> {
-    let vars_file_content: String;
-    let vars = if let Some(vars_file) = vars_file {
-        vars_file_content = std::fs::read_to_string(vars_file)?;
-        vars_file_content
+    let vars = parse_vars_file(vars_file)?;
+    for entry in glob(pattern.unwrap_or("**/*.json"))?.filter_map(Result::ok) {
+        println!("// {:?}", entry);
+        read_json_from_file(entry).ok().map(|v| transform(&v, &[], &vars));
+    }
+    Ok(())
+}
+
+fn transform(value: &Value, path: &[&str], vars: &HashMap<String, String>) {
+    let prefix = path.join("__");
+    match value {
+        Value::Object(o) => o.iter().for_each(|(n, v)| transform(v, &append(path, n), vars)),
+        Value::Array(a) => a
+            .iter()
+            .enumerate()
+            .for_each(|(i, v)| transform(v, &append(path, &i.to_string()), &vars)),
+        _ => println!("{} = {}", prefix, try_substitute(value.to_owned(), &vars)),
+    }
+}
+
+fn try_substitute<'a>(value: Value, vars: &HashMap<String, String>) -> Value {
+    if !value.is_string() { return value; }
+    let s = value.as_str().unwrap();
+    let mut out = s.to_owned(); 
+    let re = Regex::new(r"(%.*?%)").unwrap();
+    for cap in re.captures_iter(s) {
+        out = out.replace(&cap[1], &vars.get(&cap[1]).unwrap_or(&cap[1].to_owned())) 
+    }
+    Value::from(out)
+}
+
+fn parse_vars_file<P: AsRef<Path>>(path: Option<P>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    let vars = if let Some(path) = path {
+        std::fs::read_to_string(path)?
             .lines()
             .map(|l| {
                 let mut ls = l.split_whitespace();
                 match (ls.next(), ls.next()) {
-                    (Some(a), Some(b)) => Ok((a, b)),
+                    (Some(a), Some(b)) => Ok((a.to_owned(), b.to_owned())),
                     _ => Err("wrong file format"),
                 }
             })
@@ -35,28 +67,7 @@ fn traverse<P: AsRef<Path>>(pattern: Option<&str>, vars_file: Option<P>) -> Resu
     } else {
         HashMap::new()
     };
-
-    for entry in glob(pattern.unwrap_or("**/*.json"))?.filter_map(Result::ok) {
-        println!("// {:?}", entry);
-        read_json_from_file(entry).ok().map(|v| transform(&v, &[], &vars));
-    }
-    Ok(())
-}
-
-fn transform(value: &Value, path: &[&str], vars: &HashMap<&str, &str>) {
-    let prefix = path.join("__");
-    match value {
-        Value::Object(o) => o.iter().for_each(|(n, v)| transform(v, &append(path, n), vars)),
-        Value::Array(a) => a
-            .iter()
-            .enumerate()
-            .for_each(|(i, v)| transform(v, &append(path, &i.to_string()), &vars)),
-        _ => println!("{} = {}", prefix, try_substitute(value)),
-    }
-}
-
-fn try_substitute(value: &Value) -> String {
-    value.to_string()
+    Ok(vars)
 }
 
 fn read_json_from_file<P: AsRef<Path>>(path: P) -> Result<Value, Box<dyn Error>> {
