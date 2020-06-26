@@ -36,17 +36,19 @@ fn transform(value: &Value, path: &[&str], vars: &HashMap<String, String>) {
             .iter()
             .enumerate()
             .for_each(|(i, v)| transform(v, &append(path, &i.to_string()), &vars)),
-        _ => println!("{} = {}", prefix, try_substitute(value.to_owned(), &vars)),
+        _ => println!("{} = {}", prefix, substitute(value, &vars)),
     }
 }
 
-fn try_substitute<'a>(value: Value, vars: &HashMap<String, String>) -> Value {
-    if !value.is_string() { return value; }
+fn substitute<'a>(value: &Value, vars: &HashMap<String, String>) -> Value {
+    if !value.is_string() { return value.to_owned(); }
     let s = value.as_str().unwrap();
     let mut out = s.to_owned(); 
     let re = Regex::new(r"(%.*?%)").unwrap();
     for cap in re.captures_iter(s) {
-        out = out.replace(&cap[1], &vars.get(&cap[1]).unwrap_or(&cap[1].to_owned())) 
+        if vars.contains_key(&cap[1]) {
+            out = out.replace(&cap[1], &vars[&cap[1]]) 
+        }
     }
     Value::from(out)
 }
